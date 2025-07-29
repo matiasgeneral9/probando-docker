@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  sigecor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sigecor-app
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    restart: unless-stopped

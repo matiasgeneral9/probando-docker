@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>SIGECOR - Chat por Salas</title>
+  <style>
+    body { font-family: sans-serif; margin: 20px; }
+    #chat, #usuarios {
+      border: 1px solid #ccc; padding: 10px; margin-bottom: 10px;
+      height: 200px; overflow-y: auto;
+    }
+    input[type="text"] { width: 80%; }
+    button { width: 18%; }
+    #login { display: block; }
+    #chatContainer { display: none; }
+  </style>
+</head>
+<body>
+    <div id="login">
+        <h2>🔐 Ingresar a SIGECOR</h2>
+        <input id="nombreUsuario" type="text" placeholder="Escribe tu nombre..." /><br><br>
+      
+        <label for="sala">Nombre de la sala (nueva o existente):</label><br>
+        <input id="sala" type="text" placeholder="ej: general, equipo1..." /><br><br>
+      
+        <button onclick="iniciarChat()">Entrar</button>
+        <p id="errorLogin" style="color: red; font-weight: bold;"></p>
+      
+        <div id="salasActivas" style="margin-top: 10px;">
+          <strong>Salas activas:</strong>
+          <ul id="listaSalas"></ul>
+        </div>
+      </div>
+      
+
+  <div id="chatContainer">
+    <h2>💬 SIGECOR - Chat en <span id="salaActual"></span></h2>
+    <strong>Usuarios conectados:</strong>
+    <div id="usuarios"></div>
+    <p><em>(Haz clic en un nombre para enviarle un mensaje privado)</em></p>    
+    <div id="chat"></div>
+    <input id="mensaje" type="text" placeholder="Escribe un mensaje..." />
+    <button onclick="enviarMensaje()">Enviar</button>
+    <hr>
+    <h3>📩 Mensajes Privados</h3>
+    <div id="privados" style="border: 1px solid #ccc; padding: 10px; height: 150px; overflow-y: auto;"></div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    let socket;
+    let usuario = '';
+    let sala = '';
+
+    function iniciarChat() {
+  const nombre = document.getElementById('nombreUsuario').value.trim();
+  sala = document.getElementById('sala').value;
+
+  if (nombre === '') {
+    alert('Por favor, escribe tu nombre');
+    return;
+  }
+
+  usuario = nombre;
+  socket = io();
+
+  socket.on('connect', () => {
+    socket.emit('salas:pedir');
+  });
+
+
+  socket.on('chat:privado', ({ de, mensaje }) => {
+  const privados = document.getElementById('privados');
+  const item = document.createElement('div');
+  item.innerHTML = `<strong>${de} (privado):</strong> ${mensaje}`;
+  privados.appendChild(item);
+  privados.scrollTop = privados.scrollHeight;
+});
+
+
+  // 👇 Mueve esto aquí
+  socket.on('salas:lista', (salas) => {
+    const lista = document.getElementById('listaSalas');
+    lista.innerHTML = '';
+    salas.forEach(s => {
+      const li = document.createElement('li');
+      li.textContent = `#${s}`;
+      lista.appendChild(li);
+    });
+  });
+
+  socket.emit('usuario:login', { nombre: usuario, sala });
+
+  socket.on('login:error', (mensaje) => {
+    document.getElementById('errorLogin').innerText = mensaje;
+    document.getElementById('chatContainer').style.display = 'none';
+    document.getElementById('login').style.display = 'block';
+    socket.disconnect();
+  });
+
+  socket.on('usuarios:lista', (usuarios) => {
+  const contenedor = document.getElementById('usuarios');
+  contenedor.innerHTML = '';
+  usuarios.forEach(u => {
+    const item = document.createElement('div');
+    item.textContent = u;
+    item.style.cursor = 'pointer';
+    item.style.color = 'blue';
+    item.onclick = () => {
+      const mensajePrivado = prompt(`Escribe un mensaje privado para ${u}:`);
+      if (mensajePrivado && mensajePrivado.trim() !== '') {
+        socket.emit('chat:privado', {
+          de: usuario,
+          para: u,
+          mensaje: mensajePrivado.trim(),
+          sala
+        });
+      }
+    };
+    contenedor.appendChild(item);
+  });
+});
+
+  socket.on('chat:mensaje', ({ usuario, mensaje }) => {
+    const item = document.createElement('div');
+    item.textContent = `${usuario}: ${mensaje}`;
+    document.getElementById('chat').appendChild(item);
+    document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
+  });
+
+  document.getElementById('salaActual').textContent = `#${sala}`;
+  document.getElementById('login').style.display = 'none';
+  document.getElementById('chatContainer').style.display = 'block';
+}
+    function enviarMensaje() {
+      const input = document.getElementById('mensaje');
+      const texto = input.value.trim();
+      if (texto !== '') {
+        socket.emit('chat:mensaje', { usuario, mensaje: texto, sala });
+        input.value = '';
+      }
+    }
+  </script>
+</body>
+</html>
